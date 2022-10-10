@@ -35,7 +35,7 @@ export class Client {
     }
     if (!Array.isArray(parsed)) return
     for (let messageObject of parsed) {
-      messageHandlers[messageObject.m]?.(this, messageObject)
+      messageHandlers[messageObject?.m]?.(this, messageObject)
     }
   }
 

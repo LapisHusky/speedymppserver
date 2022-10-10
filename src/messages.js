@@ -32,7 +32,7 @@ messageHandlers.ch = function(client, message) {
   if (!(id?.length <= 512)) return
   let set = null
   let messageSet = message.set
-  if (typeof messageSet === "object") {
+  if (typeof messageSet === "object" && messageSet !== null) {
     set = {}
     if ("chat" in messageSet) set.chat = messageSet.chat === true
     if ("visible" in messageSet) set.visible = messageSet.visible === true
@@ -46,6 +46,7 @@ messageHandlers.ch = function(client, message) {
 
 messageHandlers.n = function(client, message) {
   if (!client.channel) return
+  if (client.channel.settings.crownsolo && client.participant.id !== client.channel.crown.participantId) return
   if (!Array.isArray(message.n)) return
   //a proper server would do some more validation here to make sure this is within a reasonable distance of Date.now(), otherwise someone could bypass a quota by building up a huge block of messages minutes in advance
   //all i do is check that it's an integer
@@ -88,7 +89,7 @@ messageHandlers.m = function(client, message) {
 
 messageHandlers.userset = function(client, message) {
   if (!client.user) return
-  if (typeof message.set !== "object") return
+  if (typeof message.set !== "object" || message.set === null) return
   let name = null
   if (typeof message.set.name === "string" && message.set.name.length <= 40) name = message.set.name
   let color = null
@@ -104,7 +105,7 @@ messageHandlers.chown = function(client, message) {
     if (client.channel.crown.userId === client.user.id) {
       //if we're in this block, the user is/was the crown holder
       //if the following condition is true, then the client is giving themself the crown when they already have it, which is pointless
-      if (client.channel.crown.participantId === message.participant.id) return
+      if (client.channel.crown.participantId === client.participant.id) return
     } else {
       //if the following is true, the client is trying to steal the crown
       if (client.channel.crown.participantId) return
@@ -129,7 +130,7 @@ messageHandlers.chset = function(client, message) {
   if (client.channel.type > 0) return
   if (client.channel.crown.participantId !== client.participant.id) return
   let messageSet = message.set
-  if (typeof messageSet !== "object") return
+  if (typeof messageSet !== "object" || messageSet === null) return
   let set = {}
   let hasEffect = false
   if ("chat" in messageSet) {
