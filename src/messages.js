@@ -6,7 +6,7 @@ export const messageHandlers = {}
 let customIdLimit = parseInt(process.env.CUSTOM_ID_LIMIT)
 messageHandlers.hi = function(client, message) {
   if (client.user) return
-  let thingToHash = client.ip
+  let thingToHash = `${process.env.ID_SALT}-${client.ip}`
   customIdChecks: if (customIdLimit > 1) {
     if (!(message.customId > 0 && message.customId <= customIdLimit)) break customIdChecks
     if (message.customId !== Math.floor(message.customId)) break customIdChecks
