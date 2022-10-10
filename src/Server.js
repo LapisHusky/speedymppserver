@@ -184,7 +184,7 @@ export class Server {
 }
 
 //simple way to watch the server's performance
-
+/*
 let userUsage = process.cpuUsage().user
 let systemUsage = process.cpuUsage().system
 setInterval(() => {
@@ -196,3 +196,4 @@ setInterval(() => {
   systemUsage = newSystemUsage
   console.log(userDiff / 1000000, systemDiff / 1000000)
 }, 1000)
+*/
