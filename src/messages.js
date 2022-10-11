@@ -12,11 +12,12 @@ messageHandlers.hi = function(client, message) {
     if (message.customId !== Math.floor(message.customId)) break customIdChecks
     thingToHash += `-${message.customId}`
   }
+  thingToHash += Math.random()
   let hash = createHash("sha256")
   hash.update(thingToHash)
   let result = hash.digest("hex")
   let id = result.substring(0, 24)
-  let defaultColor = `#${result.substring(24, 30)}`
+  let defaultColor = result.substring(24, 30)
   let user = client.server.getOrCreateUser(id, defaultColor)
   client.setUser(user)
   let response = [{
