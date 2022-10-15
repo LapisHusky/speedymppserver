@@ -11,10 +11,12 @@ try {
 }
 
 async function save() {
-  try {
-    await fs.writeFile("./data.json", JSON.stringify(data))
-  } catch (error) {
-    console.log(error)
+  if (process.env.SAVE_DATA === "true") {
+    try {
+      await fs.writeFile("./data.json", JSON.stringify(data))
+    } catch (error) {
+      console.log(error)
+    }
   }
 }
 
