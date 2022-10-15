@@ -1,20 +1,27 @@
 import { createHash } from "crypto"
 import { validateColor } from "./util.js"
+import { randomBytes } from "crypto"
 
 export const messageHandlers = {}
 
 let customIdLimit = parseInt(process.env.CUSTOM_ID_LIMIT)
+let randomizeIds = process.env.RANDOM_IDS === "true"
 messageHandlers.hi = function(client, message) {
   if (client.user) return
-  let thingToHash = `${process.env.ID_SALT}-${client.ip}`
-  customIdChecks: if (customIdLimit > 1) {
-    if (!(message.customId > 0 && message.customId <= customIdLimit)) break customIdChecks
-    if (message.customId !== Math.floor(message.customId)) break customIdChecks
-    thingToHash += `-${message.customId}`
+  let result = null
+  if (randomizeIds) {
+    result = randomBytes(15).toString("hex")
+  } else {
+    let thingToHash = `${process.env.ID_SALT}-${client.ip}`
+    customIdChecks: if (customIdLimit > 1) {
+      if (!(message.customId > 0 && message.customId <= customIdLimit)) break customIdChecks
+      if (message.customId !== Math.floor(message.customId)) break customIdChecks
+      thingToHash += `-${message.customId}`
+    }
+    let hash = createHash("sha256")
+    hash.update(thingToHash)
+    result = hash.digest("hex")
   }
-  let hash = createHash("sha256")
-  hash.update(thingToHash)
-  let result = hash.digest("hex")
   let id = result.substring(0, 24)
   let defaultColor = `#${result.substring(24, 30)}`
   let user = client.server.getOrCreateUser(id, defaultColor)
@@ -105,7 +112,7 @@ messageHandlers.chown = function(client, message) {
     if (client.channel.crown.userId === client.user.id) {
       //if we're in this block, the user is/was the crown holder
       //if the following condition is true, then the client is giving themself the crown when they already have it, which is pointless
-      if (client.channel.crown.participantId === client.participant.id) return
+      if (client.channel.crown.participantId === message.id) return
     } else {
       //if the following is true, the client is trying to steal the crown
       if (client.channel.crown.participantId) return
@@ -172,6 +179,7 @@ messageHandlers.kickban = function(client, message) {
   if (typeof message.ms !== "number") return
   if (!(message.ms >= 0 && message.ms <= 36e5)) return
   client.channel.ban(client.user, target, message.ms)
+  client.channel.sendChat(client.participant, `Banned ${target.data.name} from the channel for ${Math.ceil(message.ms / 60000)} minutes.`)
 }
 
 messageHandlers["+ls"] = function(client, message) {
