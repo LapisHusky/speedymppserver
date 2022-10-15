@@ -90,7 +90,24 @@ export class BinaryWriter {
     this.buffers.push(Buffer.from(value, "hex"))
   }
 
-  writeVarlong() {
+  writeVarlong(value) {
+    let length = 1
+    let threshold = 128
+    while (value >= threshold) {
+      length++
+      threshold *= 128
+    }
+    let buf = Buffer.allocUnsafe(length)
+    for (let i = 0; i < length - 1; i++) {
+      let segment = value % 128
+      value = Math.floor(value / 128)
+      buf[i] = 0b10000000 | segment
+    }
+    buf[length - 1] = value
+    this.buffers.push(buf)
+  }
 
+  writeString(string) {
+    let 
   }
 }
