@@ -1,6 +1,8 @@
 # speedymppserver (binary)
 A quotaless, partially limitless, and fast Node.js Multiplayer Piano server implementation that uses an efficient protocol and uWebSockets.js
+
 This is the BINARY version of the server, it it not compatible with a regular MPP client unless you have a translator between the client and websocket.
+
 This is still in early development. The JSON version of this server is ready to use in the main branch. This binary branch is not fully developed yet, and may not work in its current state. Do not contact me about getting this version to work, until it is fully developed.
 
 ## How this improves performance:
