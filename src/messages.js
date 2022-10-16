@@ -35,6 +35,7 @@ messageHandlers.hi = function(client, message) {
 }
 
 messageHandlers.ch = function(client, message) {
+  if (!client.user) return
   let id = message._id
   if (!(id?.length <= 512)) return
   let set = null
