@@ -1,6 +1,7 @@
 import { getChannelType } from "./util.js"
 import { Participant } from "./Participant.js"
 import { stringToArrayBuffer } from "./util.js"
+import { BinaryWriter } from "./binary.js"
 
 export class Channel {
   constructor(server, id, set, creatorId) {
@@ -9,32 +10,27 @@ export class Channel {
 
     this.settings = {
       chat: true,
-      visible: true
+      visible: true,
+      crownsolo: false,
+      "no cussing": false
     }
     //0: non lobby
     //1: test/ lobby
     //2: true lobby (will have 20 player limit)
     this.type = getChannelType(id)
     if (this.type > 0) {
-      this.settings.color = "#73b3cc"
-      this.settings.color2 = "#273546"
+      this.settings.color = "73b3cc"
+      this.settings.color2 = "273546"
       this.settings.lobby = true
       this.crown = null
       this.bans = null
     } else {
-      this.settings.color = "#3b5054"
+      this.settings.color = "3b5054"
+      this.settings.lobby = false
       if (set) Object.assign(this.settings, set)
       this.crown = {
-        startPos: {
-          x: 50,
-          y: 50
-        },
-        endPos: {
-          x: 50,
-          y: 50
-        },
-        time: Date.now(),
-        userId: creatorId
+        userId: creatorId,
+        dropped: false
       }
       this.bans = new Map()
     }
@@ -45,10 +41,11 @@ export class Channel {
     this.wsTopic = stringToArrayBuffer(`\x00${this.id}`)
 
     this.participantUpdates = new Set()
+    this.tickBroadcasts = []
+    this.addToChatLog = []
+    this.updateSettings = false
+    this.updateCrown = false
     this.participantRemoves = []
-    this.updateChannelInfo = false
-    this.bufferedChatMessages = []
-    this.bufferedNotifications = []
   }
 
   getOrCreateParticipant(user) {
@@ -103,18 +100,19 @@ export class Channel {
 
   giveCrown(participant, noUpdate) {
     this.crown.userId = participant.user.id
-    this.crown.participantId = participant.id
-    if (!noUpdate) this.updateChannelInfo = true
+    this.crown.dropped = false
+    if (!noUpdate) this.updateCrown = true
   }
 
   dropCrown(participant) {
-    delete this.crown.participantId
-    this.crown.time = Date.now()
-    this.crown.startPos.x = participant.x
-    this.crown.startPos.y = participant.y
-    this.crown.endPos.x = Math.max(10, Math.min(90, participant.x))
-    this.crown.endPos.y = Math.random() * 20 + 70
-    this.updateChannelInfo = true
+    this.crown.userId = participant.user.id //this line probably isn't needed
+    this.crown.dropped = true
+    this.crown.time = Math.round(performance.now())
+    this.crown.startX = participant.x
+    this.crown.startY = participant.y
+    this.crown.endX = Math.max(10, Math.min(90, participant.x))
+    this.crown.endY = Math.random() * 20 + 70
+    this.updateCrown = true
   }
 
   getInfo() {
@@ -128,17 +126,21 @@ export class Channel {
   }
 
   getPpl() {
-    let ppl = []
+    let writer = new BinaryWriter()
+    writer.writeVarlong(this.participantsBy_id.size)
     for (let participant of this.participantsBy_id.values()) {
-      ppl.push(participant.getFullInfo())
+      writer.writeBuffer(participant.getFullInfo())
     }
-    return ppl
+    return writer.getBuffer()
   }
 
   getChatLog() {
-    //return undefined so there's no c property in the JSON message, saves a *tiny* amount of bandwidth
-    if (this.chatLog.length === 0) return undefined
-    return this.chatLog
+    let writer = new BinaryWriter()
+    writer.writeVarlong(this.chatLog.length)
+    for (let buffer of this.chatLog) {
+      writer.writeBuffer(buffer)
+    }
+    return writer.getBuffer()
   }
 
   isBanned(id) {
@@ -164,7 +166,7 @@ export class Channel {
   }
 
   tick() {
-    if (this.updateChannelInfo) {
+    if (this.updateSettings) {
       if (this.settings.visible) {
         this.server.channelUpdates.add(this)
       } else {
@@ -172,7 +174,23 @@ export class Channel {
       }
     }
 
-    if (!this.updateChannelInfo && this.participantUpdates.size === 0 && this.participantRemoves.length === 0 && this.bufferedChatMessages.length === 0 && this.bufferedNotifications.length === 0) return
+    if (this.participantUpdates.size === 0 && this.tickBroadcasts.length === 0 && !this.updateSettings && !this.updateCrown && this.participantRemoves.length === 0) return
+
+    let writer = new BinaryWriter()
+    
+    if (this.participantUpdates.size > 0) {
+      writer.writeUInt8(0x03)
+      writer.writeVarlong(this.participantUpdates.size)
+      for (let participant of this.participantUpdates.values()) {
+        writer.writeBuffer(participant.getUpdate())
+      }
+      this.participantUpdates = new Set()
+    }
+
+    console.log(writer.getBuffer())
+    this.broadcastBuffer(writer.getBuffer())
+
+    return //////////////////////////////////////////////////////////////////// old code below, to be removed later
 
     let messageArray = []
     if (this.updateChannelInfo) {
@@ -237,6 +255,10 @@ export class Channel {
     this.bufferedNotifications = []
   }
 
+  broadcastBuffer(buffer) {
+    this.server.wsServer.publish(this.wsTopic, buffer.buffer, true)
+  }
+
   broadcastArray(json) {
     let buffer = stringToArrayBuffer(JSON.stringify(json))
     this.server.wsServer.publish(this.wsTopic, buffer, false)
@@ -250,13 +272,19 @@ export class Channel {
   }
 
   sendChat(participant, message) {
-    let messageObject = {
-      m: "a",
-      a: message,
-      p: participant.getPartialInfo(),
-      t: Date.now()
-    }
-    this.bufferedChatMessages.push(messageObject)
+    let time = Math.round(performance.now())
+    let writer = new BinaryWriter()
+    writer.writeUInt8(0x07)
+    writer.writeVarlong(participant.id)
+    writer.writeVarlong(time)
+    writer.writeString(message)
+    this.tickBroadcasts.push(writer.getBuffer)
+    
+    writer = new BinaryWriter()
+    writer.writeBuffer(participant.user.getInfo())
+    writer.writeVarlong(time)
+    writer.writeString(message)
+    this.addToChatLog.push(writer.getBuffer())
   }
 
   participantUpdated(participant) {
@@ -266,7 +294,7 @@ export class Channel {
   setSettings(set) {
     Object.assign(this.settings, set)
     if (!set.color2) delete this.settings.color2
-    this.updateChannelInfo = true
+    this.updateSettings = true
   }
 
   ban(banner, banned, ms) {
@@ -303,5 +331,36 @@ export class Channel {
       duration: 7000,
       target: "#room"
     })
+  }
+
+  getSettings() {
+    let writer = new BinaryWriter()
+    let bitflags = 0
+    if (this.settings.lobby) bitflags = bitflags | 0b1
+    if (this.settings.visible) bitflags = bitflags | 0b10
+    if (this.settings.chat) bitflags = bitflags | 0b100
+    if (this.settings.crownsolo) bitflags = bitflags | 0b1000
+    if (this.settings["no cussing"]) bitflags = bitflags | 0b10000
+    if (this.settings.color2) bitflags = bitflags | 0b100000
+    writer.writeUInt8(bitflags)
+    writer.writeColor(this.settings.color)
+    if (this.settings.color2) writer.writeColor(this.settings.color2)
+    return writer.getBuffer() 
+  }
+
+  getCrown() {
+    let writer = new BinaryWriter()
+    writer.writeUserId(this.crown.userId)
+    if (this.crown.dropped) {
+      writer.writeUInt8(0b1)
+      writer.writeVarlong(this.crown.time)
+      writer.writeUInt16(this.crown.startX)
+      writer.writeUInt16(this.crown.startY)
+      writer.writeUInt16(this.crown.endX)
+      writer.writeUInt16(this.crown.endY)
+    } else {
+      writer.writeUInt8(0b0)
+    }
+    return writer.getBuffer()
   }
 }

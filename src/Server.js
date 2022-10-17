@@ -84,6 +84,11 @@ export class Server {
         try {
           ws.client.handleMessage(message, isBinary)
         } catch (error) {
+          if (error?.message === "Invalid buffer read") {
+            console.log(error) //REMOVE THIS WHEN DONE DEVELOPING!!!!!!!!
+            //if i forget to remove it when i finish making this server, please let me know
+            return
+          }
           console.error(error)
         }
       },

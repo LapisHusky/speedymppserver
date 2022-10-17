@@ -1,12 +1,13 @@
 import { createHash } from "crypto"
-import { validateColor } from "./util.js"
 import { randomBytes } from "crypto"
+import { BinaryWriter } from "./binary.js"
 
-export const messageHandlers = {}
+export const messageHandlers = []
 
 let customIdLimit = parseInt(process.env.CUSTOM_ID_LIMIT)
 let randomizeIds = process.env.RANDOM_IDS === "true"
-messageHandlers.hi = function(client, message) {
+messageHandlers.push(function(client, message) {
+  let customIdValue = message.readVarlong()
   if (client.user) return
   let result = null
   if (randomizeIds) {
@@ -14,9 +15,8 @@ messageHandlers.hi = function(client, message) {
   } else {
     let thingToHash = `${process.env.ID_SALT}-${client.ip}`
     customIdChecks: if (customIdLimit > 1) {
-      if (!(message.customId > 0 && message.customId <= customIdLimit)) break customIdChecks
-      if (message.customId !== Math.floor(message.customId)) break customIdChecks
-      thingToHash += `-${message.customId}`
+      if (!(customIdValue > 0 && customIdValue <= customIdLimit)) break customIdChecks
+      thingToHash += `-${customIdValue}`
     }
     let hash = createHash("sha256")
     hash.update(thingToHash)
@@ -26,31 +26,50 @@ messageHandlers.hi = function(client, message) {
   let defaultColor = result.substring(24, 30)
   let user = client.server.getOrCreateUser(id, defaultColor)
   client.setUser(user)
-  let response = [{
-    m: "hi",
-    t: Date.now(),
-    u: user.getInfo()
-  }]
-  client.sendArray(response)
-}
+  let response = new BinaryWriter()
+  response.writeUInt8(0x00)
+  response.writeVarlong(Math.round(performance.now()))
+  response.writeBuffer(user.getInfo())
+  client.sendBuffer(response.getBuffer())
+})
 
-messageHandlers.ch = function(client, message) {
-  let id = message._id
-  if (!(id?.length <= 512)) return
-  let set = null
-  let messageSet = message.set
-  if (typeof messageSet === "object" && messageSet !== null) {
+messageHandlers.push(function(client, message) {
+  let id = message.readString()
+  let hasSet = message.readBitflag(0)
+  message.index++
+  let set
+  if (hasSet) {
     set = {}
-    if ("chat" in messageSet) set.chat = messageSet.chat === true
-    if ("visible" in messageSet) set.visible = messageSet.visible === true
-    if ("color" in messageSet && typeof messageSet.color === "string" && validateColor(messageSet.color)) set.color = messageSet.color
-    if ("color2" in messageSet && typeof messageSet.color2 === "string" && validateColor(messageSet.color2)) set.color2 = messageSet.color2
-    if ("crownsolo" in messageSet) set.crownsolo = messageSet.crownsolo === true
-    if ("no cussing" in messageSet) set["no cussing"] = messageSet["no cussing"] === true
+    set.visible = message.readBitflag(1)
+    set.chat = message.readBitflag(2)
+    set.crownsolo = message.readBitflag(3)
+    set["no cussing"] = message.readBitflag(4)
+    let hasColor2 = message.readBitflag(5)
+    message.index++
+    set.color = message.readColor()
+    if (hasColor2) set.color2 = message.readColor()
+  } else {
+    set = null
   }
+  if (!client.user) return
+  if (id.length > 512) return
   client.trySetChannel(id, set)
-}
+})
 
+messageHandlers.push(function(client, message) {
+  let response = new BinaryWriter()
+  response.writeUInt8(0x02)
+  response.writeVarlong(Math.round(performance.now()))
+  client.sendBuffer(response.getBuffer())
+})
+
+messageHandlers.push(function(client, message) {
+  let text = message.readString()
+  if (!client.channel) return
+  if (text.length > 512) return
+  client.channel.sendChat(client.participant, text)
+})
+/*
 messageHandlers.n = function(client, message) {
   if (!client.channel) return
   if (client.channel.settings.crownsolo && client.participant.id !== client.channel.crown.participantId) return
@@ -70,20 +89,6 @@ messageHandlers.n = function(client, message) {
     n: message.n
   }]
   client.channel.broadcastArrayToOthers(response, client)
-}
-
-messageHandlers.t = function(client, message) {
-  client.sendArray([{
-    m: "t",
-    t: Date.now()
-  }])
-}
-
-messageHandlers.a = function(client, message) {
-  if (!client.channel) return
-  if (typeof message.message !== "string") return
-  if (message.message.length > 512) return
-  client.channel.sendChat(client.participant, message.message)
 }
 
 messageHandlers.m = function(client, message) {
@@ -192,4 +197,4 @@ messageHandlers["-ls"] = function(client, message) {
   if (!client.user) return
   if (!client.channelListSubscribed) return
   client.channelListUnsubscribe()
-}
+}*/

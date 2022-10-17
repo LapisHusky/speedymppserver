@@ -1,4 +1,5 @@
 import { data } from "./data.js"
+import { BinaryWriter } from "./binary.js"
 
 export class User {
   constructor(server, id, color) {
@@ -29,11 +30,11 @@ export class User {
   }
 
   getInfo() {
-    return {
-      _id: this.id,
-      name: this.data.name,
-      color: this.data.color
-    }
+    let writer = new BinaryWriter()
+    writer.writeUserId(this.id)
+    writer.writeString(this.data.name)
+    writer.writeColor(this.data.color)
+    return writer.getBuffer()
   }
 
   addParticipant(participant) {

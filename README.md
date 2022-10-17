@@ -27,7 +27,7 @@ This server does not serve static files. It is recommended to host MPP's static 
 ## Notes
 Because this server is made for performance testing and as a bot playground, there is a customId option in .env. If set to 1 or greater, users will be able to create x number of random IDs for themself, by sending a customId value in authentication request messages. This field's value can be anything from 1 to the number of IDs allowed by the server.
 
-Example: `00 01 45` - this would give the user their 69th custom ID. 0 or invalid values are equivalent to not having the field at all, or give you your default ID.
+Example: `00 45` - this would give the user their 69th custom ID. 0 gives you your default ID.
 
 This server is NOT intended to be a safe server for people to use to play the piano together or chat. It is purely meant as a playground for coders. It lacks some features such as adminmsg, saved channel data, and rate limits, all of which I have no intention of implementing later. It does, however, support most of the official server's protocol and message types.
 

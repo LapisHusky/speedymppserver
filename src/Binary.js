@@ -1,3 +1,5 @@
+import { stringToArrayBuffer } from "./util.js"
+
 export class BinaryReader {
   constructor(buffer) {
     this.buffer = buffer
@@ -8,37 +10,38 @@ export class BinaryReader {
     return this.index >= this.buffer.length
   }
 
-  readUint8() {
+  readUInt8() {
     if (this.index >= this.buffer.length) throw new Error("Invalid buffer read")
     return this.buffer[this.index++]
   }
 
-  readUint16() {
+  readUInt16() {
     if (this.index + 2 > this.buffer.length) throw new Error("Invalid buffer read")
     this.index += 2
-    return this.buffer[this.index - 2]
+    return this.buffer.readUInt16LE(this.index - 2)
   }
 
   readUserId() {
     if (this.index + 12 > this.buffer.length) throw new Error("Invalid buffer read")
     this.index += 12
-    return this.buffer.toString("utf8", this.index - 12, this.index)
+    return this.buffer.toString("hex", this.index - 12, this.index)
   }
 
   readColor() {
     if (this.index + 3 > this.buffer.length) throw new Error("Invalid buffer read")
     this.index += 3
-    return this.buffer.toString("utf8", this.index - 12, this.index)
+    return this.buffer.toString("hex", this.index - 3, this.index)
   }
 
   readBitflag(bit) {
     if (this.index >= this.buffer.length) throw new Error("Invalid buffer read")
-    return this.buffer[this.index] >> bit & 0b1
+    return (this.buffer[this.index] >> bit & 0b1) === 1
   }
 
   readVarlong() {
     let num = this.buffer[this.index++]
     if (num < 128) return num
+    num = num & 0b1111111
     let factor = 128
     while (true) {
       //we don't really need to check if this varlong is too long
@@ -72,13 +75,13 @@ export class BinaryWriter {
     this.buffers = []
   }
 
-  writeUint8(value) {
+  writeUInt8(value) {
     this.buffers.push(Buffer.alloc(1, value))
   }
 
-  writeUint16(value) {
+  writeUInt16(value) {
     let buf = Buffer.allocUnsafe(2)
-    buf.writeUint16LE(value)
+    buf.writeUInt16LE(value)
     this.buffers.push(buf)
   }
 
@@ -108,6 +111,26 @@ export class BinaryWriter {
   }
 
   writeString(string) {
-    let 
+    let stringBuffer = Buffer.from(stringToArrayBuffer(string))
+    this.writeVarlong(stringBuffer.length)
+    this.buffers.push(stringBuffer)
+  }
+
+  writeBuffer(buffer) {
+    this.buffers.push(buffer)
+  }
+
+  getBuffer() {
+    let length = 0
+    for (let buffer of this.buffers) {
+      length += buffer.length
+    }
+    let outputBuffer = Buffer.allocUnsafeSlow(length)
+    let index = 0
+    for (let buffer of this.buffers) {
+      buffer.copy(outputBuffer, index)
+      index += buffer.length
+    }
+    return outputBuffer
   }
 }

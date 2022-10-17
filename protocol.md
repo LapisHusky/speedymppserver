@@ -9,15 +9,15 @@ Uint16 | 2 | Integer between 0-4294967295, little endian
 User ID | 12 | Arbitrary bytes, usually expressed as 24 character hexadecimal
 Color | 3 | First byte is red value from 0-255, second is green, third is blue
 Bitflags | 8 | 8 true/false values, with the first being the least significant bit, eighth being the most significant bit
-Varlong | 1 - 10 | Variable length integer, follows unsigned LEB128 format.
+Varlong | 1 - 10 | Variable length integer, follows unsigned LEB128 format
 String | 1+ | Begins with a Varlong expressing the byte length of the string, the bytes that follow are the string's content, UTF-8 encoded
 Array | 1+ | Begins with a Varlong expressing the length of the array, the elements follow directly after without any gap. Type of element is known from context
 
 ### Extended
 #### Full user info
 - User ID
-- Color
 - String (name)
+- Color
 
 #### Full participant info
 - Varlong (participant ID)
@@ -59,34 +59,19 @@ Array | 1+ | Begins with a Varlong expressing the length of the array, the eleme
 - ?Varlong (mmilliseconds since server startup, only if dropped)
 - ?Uint16 (crown drop animation start x, only if dropped)
 - ?Uint16 (crown drop animation start y, only if dropped)
+- ?Uint16 (crown drop animation end x, only if dropped)
+- ?Uint16 (crown drop animation end y, only if dropped)
 
-#### Partial channel info
+#### Channel info
 - Channel settings
 - ?Channel crown (only if the channel is not a lobby)
-
-#### Full channel info
-- Partial channel info
 - Varlong (current channel participant count)
 - String (channel ID)
-
-#### Partial chat message
-- Varlong (participant ID)
-- Varlong (timestamp message was received by server, milliseconds since server startup)
-- String (message content)
 
 #### Full chat message
 - Full user info
 - Varlong (timestamp message was received by server, milliseconds since server startup)
 - String (message content)
-
-#### Note broadcast
-- Varlong (participant ID)
-- Varlong (base message time, milliseconds since server startup)
-- Array&lt;Note>
-
-#### Kickban broadcast
-- User ID
-- Varlong (duration of ban, 0-3600000)
 
 ## Client -> Server Packets
 Opcode | Message
@@ -106,9 +91,7 @@ Opcode | Message
 
 ### Authentication request
 - 0x00
-- Bitflags
-  - Whether customId property is sent
-- ?Varlong (customId)
+- Varlong (customId)
 
 ### Set channel
 - 0x01
@@ -175,8 +158,14 @@ Opcode | Message
 0x00 | Authentication response
 0x01 | Set channel
 0x02 | Pong
-0x03 | Channel updates
-0x04 | Channel list update
+0x03 | Update participants
+0x04 | Remove participants
+0x05 | Update channel list
+0x06 | Kickban
+0x07 | Chat message
+0x08 | Notes played
+0x09 | Update channel settings
+0x0a | Update channel crown
 
 ### Authentication response
 - 0x00
@@ -195,29 +184,49 @@ Opcode | Message
 - 0x02
 - Varlong (milliseconds since server startup)
 
-### Channel updates
+### Update participants
 - 0x03
-- Bitflags
-  - Whether participants were updated
-  - Whether notes were sent
-  - Whether chat messages were sent
-  - Whether kickbans were performed
-  - Whether channel settings were changed
-  - Whether channel crown was changed
-  - Whether participants were removed
-- ?Array&lt;Participant update>
-- ?Array&lt;Note broadcast>
-- ?Array&lt;Partial chat message>
-- ?Array&lt;Kickban broadcast>
-- ?Channel settings
-- ?Channel crown
-- ?Array&lt;Varlong> (participant ID of removed participants)
+- Array&lt;Participant update>
 
-### Channel list update
+### Remove participants
 - 0x04
+- Array&lt;Varlong> (participant ID of removed participants)
+
+### Update channel list
+- 0x05
 - Bitflags
   - Whether this includes the full channel list
   - Whether there are channel updates
   - Whether there are removed channels
 - ?Array&lt;Full channel info>
 - ?Array&lt;String> (channel name)
+
+### Kickban
+- 0x06
+- Uint8 (action ID)
+  - 0x00: Another participant in the channel was banned
+  - 0x01: Client is being banned from the current channel
+  - 0x02: Couldn't join a channel because the client is banned
+- ?Varint (participant ID, only if action ID is 0x00)
+- Varint (duration in minutes)
+- ?String (channel the client is banned from, only if action ID is 0x02)
+
+### Chat message
+- 0x07
+- Varlong (participant ID)
+- Varlong (timestamp message was received by server, milliseconds since server startup)
+- String (message content)
+
+### Notes played
+- 0x08
+- Varlong (participant ID)
+- Varlong (base message time, milliseconds since server startup)
+- Array&lt;Note>
+
+### Update channel settings
+- 0x09
+- Channel settings
+
+### Update channel crown
+- 0x0a
+- Channel crown

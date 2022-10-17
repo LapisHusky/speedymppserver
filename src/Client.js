@@ -1,5 +1,6 @@
 import { messageHandlers } from "./messages.js"
 import { incrementLobby, arrayBufferToString, stringToArrayBuffer } from "./util.js"
+import { BinaryReader, BinaryWriter } from "./binary.js"
 
 export class Client {
   constructor(server, ws) {
@@ -25,17 +26,12 @@ export class Client {
   }
 
   handleMessage(message, isBinary) {
-    if (isBinary) return
-    let parsed
-    try {
-      parsed = JSON.parse(arrayBufferToString(message))
-    } catch (error) {
-      console.log(error)
-      return
-    }
-    if (!Array.isArray(parsed)) return
-    for (let messageObject of parsed) {
-      messageHandlers[messageObject?.m]?.(this, messageObject)
+    if (!isBinary) return
+    let reader = new BinaryReader(Buffer.from(message))
+    while (!reader.reachedEnd()) {
+      let opcode = reader.readUInt8()
+      if (!messageHandlers[opcode]) return
+      messageHandlers[opcode](this, reader)
     }
   }
 
@@ -44,9 +40,8 @@ export class Client {
     user.addClient(this)
   }
   
-  sendArray(json) {
-    let buffer = stringToArrayBuffer(JSON.stringify(json))
-    this.ws.send(buffer, false)
+  sendBuffer(buffer) {
+    this.ws.send(buffer.buffer, true)
   }
 
   trySetChannel(id, set) {
@@ -91,16 +86,14 @@ export class Client {
     this.channel = channel
     this.participant = participant
     this.ws.subscribe(this.channel.wsTopic)
-    this.sendArray([{
-      m: "ch",
-      ch: channel.getInfo(),
-      p: this.participant.id,
-      ppl: channel.getPpl()
-    },
-    {
-      m: "c",
-      c: channel.getChatLog()
-    }])
+    let writer = new BinaryWriter()
+    writer.writeUInt8(0x01)
+    writer.writeString(channel.id)
+    writer.writeBuffer(channel.getSettings())
+    if (!channel.settings.lobby) writer.writeBuffer(channel.getCrown())
+    writer.writeBuffer(channel.getPpl())
+    writer.writeBuffer(channel.getChatLog())
+    this.sendBuffer(writer.getBuffer())
   }
 
   channelListSubscribe() {

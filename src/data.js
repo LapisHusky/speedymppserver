@@ -11,6 +11,7 @@ try {
 }
 
 async function save() {
+  if (process.env.SAVE_DATA !== "true") return
   try {
     await fs.writeFile("./data.json", JSON.stringify(data))
   } catch (error) {

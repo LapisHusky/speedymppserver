@@ -3,10 +3,6 @@ export function getIpFromHeader(string) {
   return ips[ips.length - 1]
 }
 
-export function validateColor(string) {
-  return string.match(/^#[A-Fa-f0-9]{6}$/)
-}
-
 export function getChannelType(id) {
   if (id.startsWith("lobby")) {
     if (id === "lobby") return 2

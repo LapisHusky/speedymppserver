@@ -1,12 +1,13 @@
 import { stringToArrayBuffer } from "./util.js"
+import { BinaryWriter } from "./binary.js"
 
 export class Participant {
   constructor(channel, user, id) {
     this.channel = channel
     this.user = user
     this.clients = new Set()
-    this.x = 200
-    this.y = 100
+    this.x = 65535
+    this.y = 65535
 
     //keep track of what has changed since the last tick so we send as little as possible in updates
     this.updateEverything = true
@@ -14,7 +15,7 @@ export class Participant {
     this.colorChanged = false
     this.mouseChanged = false
 
-    this.id = id.toString(16)
+    this.id = id
 
     this.user.addParticipant(this)
   }
@@ -32,11 +33,12 @@ export class Participant {
   }
 
   getFullInfo() {
-    let object = this.user.getInfo()
-    object.id = this.id
-    object.x = this.x
-    object.y = this.y
-    return object
+    let writer = new BinaryWriter()
+    writer.writeVarlong(this.id)
+    writer.writeBuffer(this.user.getInfo())
+    writer.writeUInt16(this.x)
+    writer.writeUInt16(this.y)
+    return writer.getBuffer()
   }
 
   //no mouse, used in chat messages
@@ -48,27 +50,41 @@ export class Participant {
 
   //resets update state
   getUpdate() {
-    if (this.updateEverything) {
-      this.updateEverything = false
-      return this.getFullInfo()
-    }
-    let object = {
-      id: this.id
-    }
+    let updateName = false
+    let updateColor = false
+    let updateMouse = false
     if (this.nameChanged) {
-      object.name = this.user.data.name
+      updateName = true
       this.nameChanged = false
     }
     if (this.colorChanged) {
-      object.color = this.user.data.color
+      updateColor = true
       this.colorChanged = false
     }
     if (this.mouseChanged) {
-      object.x = this.x
-      object.y = this.y
+      updateMouse = true
       this.mouseChanged = false
     }
-    return object
+    if (this.updateEverything) {
+      updateName = true
+      updateColor = true
+      updateMouse = true
+      this.updateEverything = false
+    }
+    let writer = new BinaryWriter()
+    writer.writeVarlong(this.id)
+    let bitflags = 0
+    if (updateName) bitflags = bitflags | 0b1
+    if (updateColor) bitflags = bitflags | 0b10
+    if (updateMouse) bitflags = bitflags | 0b100
+    writer.writeUInt8(bitflags)
+    if (updateName) writer.writeString(this.user.data.name)
+    if (updateColor) writer.writeColor(this.user.data.color)
+    if (updateMouse) {
+      writer.writeUInt16(this.x)
+      writer.writeUInt16(this.y)
+    }
+    return writer.getBuffer()
   }
 
   setMousePos(x, y) {
