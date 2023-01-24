@@ -29,8 +29,7 @@ export class BinaryReader {
 
   readColor() {
     if (this.index + 3 > this.buffer.length) throw new Error("Invalid buffer read")
-    this.index += 3
-    return this.buffer.toString("hex", this.index - 3, this.index)
+    return (this.buffer[this.index++] << 16) | (this.buffer[this.index++] << 8) | this.buffer[this.index++]
   }
 
   readBitflag(bit) {
@@ -90,7 +89,7 @@ export class BinaryWriter {
   }
 
   writeColor(value) {
-    this.buffers.push(Buffer.from(value, "hex"))
+    this.buffers.push(Buffer.from([value >> 16, (value >> 8) & 0xff, value & 0xff]))
   }
 
   writeVarlong(value) {

@@ -50,6 +50,7 @@ export class Participant {
 
   //resets update state
   getUpdate() {
+    let updateUserId = false
     let updateName = false
     let updateColor = false
     let updateMouse = false
@@ -66,6 +67,7 @@ export class Participant {
       this.mouseChanged = false
     }
     if (this.updateEverything) {
+      updateUserId = true
       updateName = true
       updateColor = true
       updateMouse = true
@@ -74,10 +76,12 @@ export class Participant {
     let writer = new BinaryWriter()
     writer.writeVarlong(this.id)
     let bitflags = 0
-    if (updateName) bitflags = bitflags | 0b1
-    if (updateColor) bitflags = bitflags | 0b10
-    if (updateMouse) bitflags = bitflags | 0b100
+    if (updateUserId) bitflags = bitflags | 0b1
+    if (updateName) bitflags = bitflags | 0b10
+    if (updateColor) bitflags = bitflags | 0b100
+    if (updateMouse) bitflags = bitflags | 0b1000
     writer.writeUInt8(bitflags)
+    if (updateUserId) writer.writeUserId(this.user.id)
     if (updateName) writer.writeString(this.user.data.name)
     if (updateColor) writer.writeColor(this.user.data.color)
     if (updateMouse) {
@@ -106,5 +110,12 @@ export class Participant {
     for (let client of this.clients.values()) {
       client.ws.send(buffer, false)
     }
+  }
+
+  isOwner() {
+    if (this.channel.type > 0) return false
+    if (this.channel.crown.dropped) return false
+    if (this.channel.crown.userId !== this.user.id) return false
+    return true
   }
 }

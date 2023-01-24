@@ -20,7 +20,7 @@ export class Server {
     this.channelListMsgCache = null
     this.channelUpdates = new Set()
 
-    this.participantIdCounter = 0
+    this.participantIdCounter = 1 //zero is falsy and causes the client to ignore "p" in "ch" messages
     
     this.destroyed = false
   }

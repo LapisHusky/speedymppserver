@@ -19,13 +19,13 @@ export class Channel {
     //2: true lobby (will have 20 player limit)
     this.type = getChannelType(id)
     if (this.type > 0) {
-      this.settings.color = "73b3cc"
-      this.settings.color2 = "273546"
+      this.settings.color = 0x73b3cc
+      this.settings.color2 = 0x273546
       this.settings.lobby = true
       this.crown = null
       this.bans = null
     } else {
-      this.settings.color = "3b5054"
+      this.settings.color = 0x3b5054
       this.settings.lobby = false
       if (set) Object.assign(this.settings, set)
       this.crown = {
@@ -85,9 +85,8 @@ export class Channel {
     //check if we're dropping the crown
     crownChecks: {
       if (this.type > 0) break crownChecks
-      if (!this.crown.participantId) break crownChecks
+      if (this.crown.dropped) break crownChecks
       if (this.crown.userId !== participant.user.id) break crownChecks
-      //if we're the last one leaving, don't announce, anyone new would know about the crown drop
       this.dropCrown(participant)
     }
 
@@ -107,11 +106,11 @@ export class Channel {
   dropCrown(participant) {
     this.crown.userId = participant.user.id //this line probably isn't needed
     this.crown.dropped = true
-    this.crown.time = Math.round(performance.now())
+    this.crown.time = Date.now()
     this.crown.startX = participant.x
     this.crown.startY = participant.y
-    this.crown.endX = Math.max(10, Math.min(90, participant.x))
-    this.crown.endY = Math.random() * 20 + 70
+    this.crown.endX = Math.max(6553, Math.min(58981, participant.x))
+    this.crown.endY = Math.random() * 13107 + 45874
     this.updateCrown = true
   }
 
@@ -187,6 +186,51 @@ export class Channel {
       this.participantUpdates = new Set()
     }
 
+    if (this.tickBroadcasts.length > 0) {
+      for (let message of this.tickBroadcasts) {
+        writer.writeBuffer(message)
+      }
+      this.tickBroadcasts = []
+    }
+
+    if (this.participantRemoves.length > 0) {
+      writer.writeUInt8(0x04)
+      writer.writeVarlong(this.participantRemoves.length)
+      for (let id of this.participantRemoves) {
+        writer.writeVarlong(id)
+      }
+      this.participantRemoves = []
+    }
+
+    if (this.addToChatLog.length > 0) {
+      let totalLength = this.chatLog.length + this.addToChatLog.length
+      let extraCount = totalLength - 32
+      if (extraCount > 32) {
+        //we're adding a lot of messages, no point in even keeping old chatLog, instead replace entirely with the last 32 sent messages
+        this.chatLog = this.addToChatLog.slice(this.addToChatLog.length - 32)
+      } else {
+        if (extraCount > 0) {
+          //we're adding enough messages to overflow the chatLog limit of 32, let's splice the start of the array to make it short enough, then push new messages to the end
+          this.chatLog.splice(0, extraCount)
+        }
+        //add new messages to the end
+        this.chatLog.push(...this.addToChatLog)
+      }
+      this.addToChatLog = []
+    }
+
+    if (this.updateCrown) {
+      this.updateCrown = false
+      writer.writeUInt8(0x0a)
+      writer.writeBuffer(this.getCrown())
+    }
+
+    if (this.updateSettings) {
+      this.updateSettings = false
+      writer.writeUInt8(0x09)
+      writer.writeBuffer(this.getSettings())
+    }
+
     console.log(writer.getBuffer())
     this.broadcastBuffer(writer.getBuffer())
 
@@ -259,32 +303,28 @@ export class Channel {
     this.server.wsServer.publish(this.wsTopic, buffer.buffer, true)
   }
 
-  broadcastArray(json) {
-    let buffer = stringToArrayBuffer(JSON.stringify(json))
-    this.server.wsServer.publish(this.wsTopic, buffer, false)
-  }
-
-  broadcastArrayToOthers(json, client) {
-    //we have to temporarily unsubscribe the client and resubscribe it after, sadly uWebSockets.js doesn't have "prepared messages" that we can send to whoever we wish
-    client.ws.unsubscribe(this.wsTopic)
-    this.broadcastArray(json)
-    client.ws.subscribe(this.wsTopic)
-  }
-
   sendChat(participant, message) {
-    let time = Math.round(performance.now())
+    let time = Date.now()
     let writer = new BinaryWriter()
     writer.writeUInt8(0x07)
     writer.writeVarlong(participant.id)
     writer.writeVarlong(time)
     writer.writeString(message)
-    this.tickBroadcasts.push(writer.getBuffer)
+    this.tickBroadcasts.push(writer.getBuffer())
     
     writer = new BinaryWriter()
     writer.writeBuffer(participant.user.getInfo())
     writer.writeVarlong(time)
     writer.writeString(message)
     this.addToChatLog.push(writer.getBuffer())
+  }
+
+  sendNotes(participant, notesBuffer) {
+    let writer = new BinaryWriter()
+    writer.writeUInt8(0x08)
+    writer.writeVarlong(participant.id)
+    writer.writeBuffer(notesBuffer)
+    this.tickBroadcasts.push(writer.getBuffer())
   }
 
   participantUpdated(participant) {

@@ -13,6 +13,8 @@ Varlong | 1 - 10 | Variable length integer, follows unsigned LEB128 format
 String | 1+ | Begins with a Varlong expressing the byte length of the string, the bytes that follow are the string's content, UTF-8 encoded
 Array | 1+ | Begins with a Varlong expressing the length of the array, the elements follow directly after without any gap. Type of element is known from context
 
+Side note: the server's time is expressed as a Varlong and is the output of javascript's Date.now(). This may vary from the client's time if either the server or client are out of sync, so clients are expected to calculate and account for this difference when sending and receiving some messages.
+
 ### Extended
 #### Full user info
 - User ID
@@ -28,16 +30,18 @@ Array | 1+ | Begins with a Varlong expressing the length of the array, the eleme
 #### Participant update
 - Varlong (participant ID)
 - Bitflags
+  - Whether User ID is included (only if the participant is new)
   - Whether name is included
   - Whether color is included
   - Whether mouse position is included
+- ?User ID
 - ?String (name)
 - ?Color
 - ?Uint16 (mouse x)
 - ?Uint16 (mouse y)
 
 #### Note
-- Uint8 (note ID)
+- Uint8 (note ID, follows MIDI note IDs)
 - Uint8 (velocity from 0-127 if note start, or 255 if note stop)
 - Uint8 (delay from the message's base time)
 
@@ -56,7 +60,7 @@ Array | 1+ | Begins with a Varlong expressing the length of the array, the eleme
 - User ID (crown holder or last crown holder)
 - Bitflags
   - Whether the crown is dropped
-- ?Varlong (mmilliseconds since server startup, only if dropped)
+- ?Varlong (server's time when the crown was dropped, only if dropped)
 - ?Uint16 (crown drop animation start x, only if dropped)
 - ?Uint16 (crown drop animation start y, only if dropped)
 - ?Uint16 (crown drop animation end x, only if dropped)
@@ -70,7 +74,7 @@ Array | 1+ | Begins with a Varlong expressing the length of the array, the eleme
 
 #### Full chat message
 - Full user info
-- Varlong (timestamp message was received by server, milliseconds since server startup)
+- Varlong (server's time)
 - String (message content)
 
 ## Client -> Server Packets
@@ -109,7 +113,7 @@ Opcode | Message
 
 ### Notes
 - 0x04
-- Varlong (base message time, milliseconds since server startup)
+- Varlong (server's time)
 - Array&lt;Note>
 
 ### Move mouse
@@ -169,7 +173,7 @@ Opcode | Message
 
 ### Authentication response
 - 0x00
-- Varlong (milliseconds since server startup)
+- Varlong (server's time)
 - Full user info
 
 ### Set channel
@@ -182,7 +186,7 @@ Opcode | Message
 
 ### Pong
 - 0x02
-- Varlong (milliseconds since server startup)
+- Varlong (server's time)
 
 ### Update participants
 - 0x03
@@ -204,23 +208,22 @@ Opcode | Message
 ### Kickban
 - 0x06
 - Uint8 (action ID)
-  - 0x00: Another participant in the channel was banned
-  - 0x01: Client is being banned from the current channel
-  - 0x02: Couldn't join a channel because the client is banned
+  - 0x00: A user is being banned from the current channel
+  - 0x01: Couldn't join a channel because the client is banned
 - ?Varint (participant ID, only if action ID is 0x00)
-- Varint (duration in minutes)
-- ?String (channel the client is banned from, only if action ID is 0x02)
+- Varint (remaining ban time in milliseconds)
+- ?String (channel the client is banned from, only if action ID is 0x01)
 
 ### Chat message
 - 0x07
 - Varlong (participant ID)
-- Varlong (timestamp message was received by server, milliseconds since server startup)
+- Varlong (server's time when the message was received)
 - String (message content)
 
 ### Notes played
 - 0x08
 - Varlong (participant ID)
-- Varlong (base message time, milliseconds since server startup)
+- Varlong (base message time, server's time)
 - Array&lt;Note>
 
 ### Update channel settings
