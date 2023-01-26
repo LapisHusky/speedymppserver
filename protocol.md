@@ -100,8 +100,6 @@ Opcode | Message
 ### Set channel
 - 0x01
 - String (channel name)
-- Bitflags
-  - Whether channel settings are included in this message
 - ?Channel settings
 
 ### Ping
@@ -198,20 +196,18 @@ Opcode | Message
 
 ### Update channel list
 - 0x05
-- Bitflags
-  - Whether this includes the full channel list
-  - Whether there are channel updates
-  - Whether there are removed channels
-- ?Array&lt;Full channel info>
-- ?Array&lt;String> (channel name)
+- Uint8(action ID)
+  - 0x00: This is the full channel lisit
+  - 0x01: Channels are being updated
+- Array&lt;Channel info> (updated channels)
 
 ### Kickban
 - 0x06
 - Uint8 (action ID)
   - 0x00: A user is being banned from the current channel
   - 0x01: Couldn't join a channel because the client is banned
-- ?Varint (participant ID, only if action ID is 0x00)
 - Varint (remaining ban time in milliseconds)
+- ?Varint (participant ID, only if action ID is 0x00)
 - ?String (channel the client is banned from, only if action ID is 0x01)
 
 ### Chat message

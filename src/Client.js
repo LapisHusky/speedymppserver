@@ -60,14 +60,12 @@ export class Client {
       //is non lobby
       let banDuration = channel.isBanned(this.user.id)
       if (banDuration) {
-        this.sendArray([{
-          m: "notification",
-          title: "Notice",
-          text: `Currently banned from ${id} for ${Math.ceil(banDuration / 60000)} minutes.`,
-          duration: 7000,
-          target: "#room",
-          class: "short"
-        }])
+        let writer = new BinaryWriter()
+        writer.writeUInt8(0x06)
+        writer.writeUInt8(0x01)
+        writer.writeVarlong(banDuration)
+        writer.writeString(id)
+        this.sendBuffer(writer.getBuffer())
         this.setChannel(this.server.getOrCreateChannel("test/awkward"))
         return
       }
@@ -99,7 +97,7 @@ export class Client {
   channelListSubscribe() {
     this.channelListSubscribed = true
     this.ws.subscribe(this.server.channelListTopic)
-    this.ws.send(this.server.getFullChannelListMsg())
+    this.sendBuffer(this.server.getFullChannelListMsg())
   }
 
   channelListUnsubscribe() {

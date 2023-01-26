@@ -4,6 +4,7 @@ import { Client } from "./Client.js"
 import { User } from "./User.js"
 import { Channel } from "./Channel.js"
 import { getIpFromHeader, arrayBufferToString, stringToArrayBuffer } from "./util.js"
+import { BinaryWriter } from "./binary.js"
 
 export class Server {
   constructor() {
@@ -20,7 +21,7 @@ export class Server {
     this.channelListMsgCache = null
     this.channelUpdates = new Set()
 
-    this.participantIdCounter = 1 //zero is falsy and causes the client to ignore "p" in "ch" messages
+    this.participantIdCounter = 1 //zero is falsy
     
     this.destroyed = false
   }
@@ -51,6 +52,7 @@ export class Server {
     server.ws("/*", {
       maxPayloadLength: 1 << 20,
       maxBackpressure: 2 << 20,
+      closeOnBackpressureLimit: true,
       idleTimeout: 60,
       sendPingsAutomatically: true,
       upgrade: async (res, req, context) => {
@@ -84,11 +86,7 @@ export class Server {
         try {
           ws.client.handleMessage(message, isBinary)
         } catch (error) {
-          if (error?.message === "Invalid buffer read") {
-            console.log(error) //REMOVE THIS WHEN DONE DEVELOPING!!!!!!!!
-            //if i forget to remove it when i finish making this server, please let me know
-            return
-          }
+          if (error?.message === "Invalid buffer read") return
           console.error(error)
         }
       },
@@ -120,18 +118,15 @@ export class Server {
     }
     this.channelListMsgCache = null
     if (this.channelUpdates.size > 0) {
-      let array = []
-      //this does not include the "banned" property that appears in ls messages in standard servers, but idc, this optimization is worth it for the goal of this server
+      let writer = new BinaryWriter()
+      writer.writeUInt8(0x05)
+      writer.writeUInt8(0x01)
+      writer.writeVarlong(this.channelUpdates.size)
       for (let channel of this.channelUpdates.values()) {
-        array.push(channel.getInfo())
+        writer.writeBuffer(channel.getInfo())
       }
-      let message = [{
-        m: "ls",
-        c: false,
-        u: array
-      }]
-      message = stringToArrayBuffer(JSON.stringify(message))
-      this.wsServer.publish(this.channelListTopic, message, false)
+      let message = writer.getBuffer()
+      this.wsServer.publish(this.channelListTopic, message, true)
 
       this.channelUpdates = new Set()
     }
@@ -172,17 +167,19 @@ export class Server {
 
   getFullChannelListMsg() {
     if (this.channelListMsgCache) return this.channelListMsgCache
-    let channels = []
+    let writer = new BinaryWriter()
+    writer.writeUInt8(0x05)
+    writer.writeUInt8(0x00)
+    let visibleChannelInfos = []
     for (let channel of this.channels.values()) {
       if (!channel.settings.visible) continue
-      channels.push(channel.getInfo())
+      visibleChannelInfos.push(channel.getInfo())
     }
-    let message = [{
-      m: "ls",
-      c: true,
-      u: channels
-    }]
-    message = stringToArrayBuffer(JSON.stringify(message))
+    writer.writeVarlong(visibleChannelInfos.length)
+    for (let buffer of visibleChannelInfos) {
+      writer.writeBuffer(buffer)
+    }
+    let message = writer.getBuffer()
     this.channelListMsgCache = message
     return message
   }

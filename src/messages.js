@@ -35,22 +35,16 @@ messageHandlers.push(function(client, message) {
 
 messageHandlers.push(function(client, message) {
   let id = message.readString()
-  let hasSet = message.readBitflag(0)
-  message.index++
   let set
-  if (hasSet) {
-    set = {}
-    set.visible = message.readBitflag(1)
-    set.chat = message.readBitflag(2)
-    set.crownsolo = message.readBitflag(3)
-    set["no cussing"] = message.readBitflag(4)
-    let hasColor2 = message.readBitflag(5)
-    message.index++
-    set.color = message.readColor()
-    if (hasColor2) set.color2 = message.readColor()
-  } else {
-    set = null
-  }
+  set = {}
+  set.visible = message.readBitflag(1)
+  set.chat = message.readBitflag(2)
+  set.crownsolo = message.readBitflag(3)
+  set["no cussing"] = message.readBitflag(4)
+  let hasColor2 = message.readBitflag(5)
+  message.index++
+  set.color = message.readColor()
+  if (hasColor2) set.color2 = message.readColor()
   if (!client.user) return
   if (id.length > 512) return
   client.trySetChannel(id, set)
@@ -71,47 +65,47 @@ messageHandlers.push(function(client, message) {
 })
 
 messageHandlers.push(function(client, message) {
-  if (!client.channel) return
-  if (client.channel.settings.crownsolo && !client.participant.isOwner()) return
   let startIndex = message.index
   let time = message.readVarlong()
   let count = message.readVarlong()
+  let valid = true
   for (let i = count; i--;) {
     let noteId = message.readUInt8()
-    if (noteId < 21 || noteId > 108) return
+    if (noteId < 21 || noteId > 108) valid = false
     let velocity = message.readUInt8()
-    if (velocity > 127 && velocity !== 255) return
+    if (velocity > 127 && velocity !== 255) valid = false
     message.readUInt8()
   }
+  if (!valid) return
+  if (!client.channel) return
+  if (client.channel.settings.crownsolo && !client.participant.isOwner()) return
   let notesBuffer = message.buffer.slice(startIndex, message.index)
   client.channel.sendNotes(client.participant, notesBuffer)
 })
 
 messageHandlers.push(function(client, message) {
-  if (!client.channel) return
   let x = message.readUInt16()
   let y = message.readUInt16()
+  if (!client.channel) return
   client.participant.setMousePos(x, y)
 })
 
 messageHandlers.push(function(client, message) {
-  if (!client.user) return
   let nameChanged = message.readBitflag(0)
   let colorChanged = message.readBitflag(1)
   message.index++
   let name = nameChanged ? message.readString() : null
   let color = colorChanged ? message.readColor() : null
+  if (!client.user) return
   client.user.setData(name, color)
 })
 
 messageHandlers.push(function(client, message) {
-  if (!client.channel) return
-  if (client.channel.type > 0) return
   let type = message.readUInt8()
-
   if (type !== 0x01) {
-    let participant = type === 0x02 ? client.channel.participantsById.get(message.readVarlong()) : client.participant
+    let participant = type === 0x02 ? client.channel?.participantsById.get(message.readVarlong()) : client.participant
     if (!participant) return
+    if (client.channel.type > 0) return
     if (client.channel.crown.userId === client.user.id) {
       //if we're in this block, the user is/was the crown holder
       //if the following condition is true, then the client is giving themself the crown when they already have it, which is pointless
@@ -124,15 +118,14 @@ messageHandlers.push(function(client, message) {
     }
     client.channel.giveCrown(participant)
   } else {
+    if (!client.channel) return
+    if (client.channel.type > 0) return
     if (client.channel.crown.userId !== client.user.id) return
     client.channel.dropCrown(client.participant)
   }
 })
 
 messageHandlers.push(function(client, message) {
-  if (!client.channel) return
-  if (client.channel.type > 0) return
-  if (!client.participant.isOwner()) return
   let set = {}
   set.visible = message.readBitflag(1)
   set.chat = message.readBitflag(2)
@@ -142,31 +135,42 @@ messageHandlers.push(function(client, message) {
   message.index++
   set.color = message.readColor()
   if (hasColor2) set.color2 = message.readColor()
+  if (!client.channel) return
+  if (!client.participant.isOwner()) return
   client.channel.setSettings(set)
 })
-/*
-messageHandlers.kickban = function(client, message) {
-  if (!client.channel) return
-  if (client.channel.type > 0) return
-  if (client.channel.crown.participantId !== client.participant.id) return
-  if (typeof message._id !== "string") return
-  let target = client.server.users.get(message._id)
+
+messageHandlers.push(function(client, message) {
+  let id = message.readUserId()
+  let target = client.server.users.get(id)
+  let ms = message.readVarlong()
   if (!target) return
-  if (client.channel.isBanned(message._id)) return
-  if (typeof message.ms !== "number") return
-  if (!(message.ms >= 0 && message.ms <= 36e5)) return
-  client.channel.ban(client.user, target, message.ms)
-  client.channel.sendChat(client.participant, `Banned ${target.data.name} from the channel for ${Math.ceil(message.ms / 60000)} minutes.`)
-}
+  if (client.channel.isBanned(id)) return
+  if (ms > 36e5) return
+  if (!client.channel) return
+  if (!client.participant.isOwner()) return
+  client.channel.ban(target, ms)
+  client.channel.sendChat(client.participant, `Banned ${target.data.name} from the channel for ${Math.ceil(ms / 60000)} minutes.`)
+})
 
-messageHandlers["+ls"] = function(client, message) {
-  if (!client.user) return
-  if (client.channelListSubscribed) return
-  client.channelListSubscribe()
-}
+messageHandlers.push(function(client, message) {
+  let id = message.readUserId()
+  if (!client.channel) return
+  if (!client.participant.isOwner()) return
+  let target = client.server.users.get(id)
+  if (!target) return
+  if (!client.channel.isBanned(id)) return
+  client.channel.unban(id)
+})
 
-messageHandlers["-ls"] = function(client, message) {
+messageHandlers.push(function(client, message) {
+  let actionId = message.readUInt8()
   if (!client.user) return
-  if (!client.channelListSubscribed) return
-  client.channelListUnsubscribe()
-}*/
+  if (actionId === 0x00) {
+    if (client.channelListSubscribed) return
+    client.channelListSubscribe() 
+  } else {
+    if (!client.channelListSubscribed) return
+    client.channelListUnsubscribe()
+  }
+})

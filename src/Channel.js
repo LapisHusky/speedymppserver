@@ -115,13 +115,12 @@ export class Channel {
   }
 
   getInfo() {
-    let object = {
-      _id: this.id,
-      settings: this.settings,
-      count: this.participantsBy_id.size
-    }
-    if (this.crown) object.crown = this.crown
-    return object
+    let writer = new BinaryWriter()
+    writer.writeBuffer(this.getSettings())
+    if (this.type === 0) writer.writeBuffer(this.getCrown())
+    writer.writeVarlong(this.participantsBy_id.size)
+    writer.writeString(this.id)
+    return writer.getBuffer()
   }
 
   getPpl() {
@@ -231,72 +230,7 @@ export class Channel {
       writer.writeBuffer(this.getSettings())
     }
 
-    console.log(writer.getBuffer())
     this.broadcastBuffer(writer.getBuffer())
-
-    return //////////////////////////////////////////////////////////////////// old code below, to be removed later
-
-    let messageArray = []
-    if (this.updateChannelInfo) {
-      let ppl = []
-      for (let participant of this.participantsBy_id.values()) {
-        ppl.push(participant.getUpdate())
-      }
-      messageArray.push({
-        m: "ch",
-        ch: this.getInfo(),
-        ppl
-      })
-      this.updateChannelInfo = false
-    } else {
-      for (let participant of this.participantUpdates.values()) {
-        let messageType = (participant.nameChanged || participant.colorChanged || participant.updateEverything) ? "p" : "m"
-        let object = participant.getUpdate()
-        object.m = messageType
-        messageArray.push(object)
-      }
-      for (let id of this.participantRemoves) {
-        messageArray.push({
-          m: "bye",
-          p: id
-        })
-      }
-    }
-    for (let message of this.bufferedChatMessages) {
-      messageArray.push(message)
-    }
-    for (let message of this.bufferedNotifications) {
-      messageArray.push(message)
-    }
-
-    this.broadcastArray(messageArray)
-
-    this.participantUpdates = new Set()
-    this.participantRemoves = []
-    if (this.bufferedChatMessages.length > 0) {
-      //delete "m" in the message since new clients will know it's a chat message because it's part of "c"
-      for (let message of this.bufferedChatMessages) {
-        delete message.m
-      }
-      //calculations to update this.chatLog
-      //the reason chatLog is updated here instead of immediately is so that new clients in the channel don't receive messages twice
-      let totalLength = this.chatLog.length + this.bufferedChatMessages.length
-      let extraCount = totalLength - 32
-      if (extraCount > 32) {
-        //we're adding a lot of messages, no point in even keeping old chatLog, instead replace entirely with the last 32 sent messages
-        this.chatLog = this.bufferedChatMessages.slice(this.bufferedChatMessages.length - 32)
-      } else {
-        if (extraCount > 0) {
-          //we're adding enough messages to overflow the chatLog limit of 32, let's splice the start of the array to make it short enough, then push new messages to the end
-          this.chatLog.splice(0, extraCount)
-        }
-        //add new messages to the end
-        this.chatLog.push(...this.bufferedChatMessages)
-      }
-      
-      this.bufferedChatMessages = []
-    }
-    this.bufferedNotifications = []
   }
 
   broadcastBuffer(buffer) {
@@ -337,40 +271,27 @@ export class Channel {
     this.updateSettings = true
   }
 
-  ban(banner, banned, ms) {
+  ban(banned, ms) {
     this.bans.set(banned.id, Date.now() + ms)
     let participant = this.participantsBy_id.get(banned.id)
     if (participant) {
-      participant.broadcastArray([{
-        m: "notification",
-        title: "Notice",
-        text: `Banned from ${this.id} for ${Math.floor(ms / 60000)} minutes.`,
-        duration: 7000,
-        target: "#room",
-        class: "short"
-      }])
-    }
-    if (participant) {
+      let writer = new BinaryWriter()
+      writer.writeUInt8(0x06)
+      writer.writeUInt8(0x00)
+      writer.writeVarlong(ms)
+      writer.writeVarlong(participant.id)
+      let buffer = writer.getBuffer()
+      this.tickBroadcasts.push(buffer)
+      participant.broadcastBuffer(buffer)
       let testAwkward = this.server.getOrCreateChannel("test/awkward")
       for (let client of participant.clients.values()) {
         client.setChannel(testAwkward)
       }
     }
-    this.bufferedNotifications.push({
-      m: "notification",
-      title: "Notice",
-      text: `${banner.data.name} banned ${banned.data.name} from the channel for ${Math.floor(ms / 60000)} minutes.`,
-      duration: 7000,
-      target: "#room",
-      class: "short"
-    })
-    if (banned.id === this.crown.userId) this.bufferedNotifications.push({
-      m: "notification",
-      title: "Certificate of Award",
-      text: `Let it be known that ${banned.data.name} kickbanned him/her self.`,
-      duration: 7000,
-      target: "#room"
-    })
+  }
+
+  unban(id) {
+    this.bans.delete(id)
   }
 
   getSettings() {

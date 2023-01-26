@@ -104,11 +104,9 @@ export class Participant {
     this.channel.participantUpdated(this)
   }
 
-  broadcastArray(json) {
-    let buffer = stringToArrayBuffer(JSON.stringify(json))
-    //no pub/sub, this is very rarely used so it's not worth it
+  broadcastBuffer(buffer) {
     for (let client of this.clients.values()) {
-      client.ws.send(buffer, false)
+      client.sendBuffer(buffer)
     }
   }
 
