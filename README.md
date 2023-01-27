@@ -3,7 +3,7 @@ A quotaless, partially limitless, and fast Node.js Multiplayer Piano server impl
 
 This is the BINARY version of the server, it it not compatible with a regular MPP client unless you have a translator between the client and websocket.
 
-This is still in early development. The JSON version of this server is ready to use in the main branch. This binary branch is not fully developed yet, and may not work in its current state. Do not contact me about getting this version to work, until it is fully developed.
+It is intended to work with this client: https://github.com/LapisHusky/binarymppclient
 
 ## How this improves performance:
 - All messages are in an optimized, custom, binary format, as opposed to JSON in every other Multiplayer Piano server. This is the first fully binary MPP server, involving a large protocol redesign.
