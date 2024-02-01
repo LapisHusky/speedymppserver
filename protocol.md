@@ -197,7 +197,7 @@ Opcode | Message
 ### Update channel list
 - 0x05
 - Uint8(action ID)
-  - 0x00: This is the full channel lisit
+  - 0x00: This is the full channel list
   - 0x01: Channels are being updated
 - Array&lt;Channel info> (updated channels)
 
