@@ -8,7 +8,7 @@ Uint8 | 1 | Integer between 0-255
 Uint16 | 2 | Integer between 0-4294967295, little endian
 User ID | 12 | Arbitrary bytes, usually expressed as 24 character hexadecimal
 Color | 3 | First byte is red value from 0-255, second is green, third is blue
-Bitflags | 8 | 8 true/false values, with the first being the least significant bit, eighth being the most significant bit
+Bitflags | 1 | 8 true/false values, with the first being the least significant bit, eighth being the most significant bit
 Varlong | 1 - 10 | Variable length integer, follows unsigned LEB128 format
 String | 1+ | Begins with a Varlong expressing the byte length of the string, the bytes that follow are the string's content, UTF-8 encoded
 Array | 1+ | Begins with a Varlong expressing the length of the array, the elements follow directly after without any gap. Type of element is known from context
